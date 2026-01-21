@@ -18,6 +18,13 @@ type PostDetail = {
   createDate: string;
 };
 
+const resolveImageUrl = (url: string) => {
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  return buildApiUrl(url);
+};
+
 export default function PostDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -145,12 +152,18 @@ export default function PostDetailPage() {
           <h2 style={{ marginTop: 0 }}>이미지</h2>
           {post.imageUrls?.length ? (
             <div className="grid-2">
-              {post.imageUrls.map((url, index) => (
-                <div key={`${url}-${index}`} className="panel">
-                  <div className="muted">이미지 URL</div>
-                  <div style={{ wordBreak: "break-all" }}>{url}</div>
-                </div>
-              ))}
+              {post.imageUrls.map((url, index) => {
+                const resolvedUrl = resolveImageUrl(url);
+                return (
+                  <div key={`${url}-${index}`} className="panel">
+                    <img
+                      alt={`게시글 이미지 ${index + 1}`}
+                      src={resolvedUrl}
+                      style={{ width: "100%", borderRadius: 12 }}
+                    />
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="empty">등록된 이미지가 없습니다.</div>

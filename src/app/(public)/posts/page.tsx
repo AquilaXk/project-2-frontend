@@ -9,7 +9,7 @@ import { buildApiUrl, parseRsData } from "@/lib/api";
 type PostItem = {
   id: number;
   title: string;
-  price: number;
+  price: number | null;
   categoryName: string;
   thumbnailUrl?: string;
   createDate: string;
@@ -19,6 +19,11 @@ type PostPageData = {
   content?: PostItem[];
   totalPages?: number;
   totalElements?: number;
+};
+
+const formatNumber = (value: number | null | undefined) => {
+  if (value === null || value === undefined) return "-";
+  return value.toLocaleString();
 };
 
 export default function PostsPage() {
@@ -154,7 +159,7 @@ export default function PostsPage() {
                 <div className="tag">{post.categoryName}</div>
                 <h3 style={{ margin: "12px 0 6px" }}>{post.title}</h3>
                 <div className="muted">
-                  {post.price.toLocaleString()}원 · {post.createDate}
+                  {formatNumber(post.price)}원 · {post.createDate}
                 </div>
               </Link>
             ))}

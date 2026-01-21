@@ -11,7 +11,7 @@ type AuctionItem = {
   name: string;
   thumbnailUrl?: string;
   startPrice: number;
-  currentHighestBid: number;
+  currentHighestBid: number | null;
   buyNowPrice?: number;
   status: string;
   endAt: string;
@@ -30,6 +30,11 @@ type AuctionPageData = {
   size?: number;
   totalElements?: number;
   totalPages?: number;
+};
+
+const formatNumber = (value: number | null | undefined) => {
+  if (value === null || value === undefined) return "-";
+  return value.toLocaleString();
 };
 
 export default function AuctionsPage() {
@@ -192,7 +197,7 @@ export default function AuctionsPage() {
                 <div className="tag">{auction.status}</div>
                 <h3 style={{ margin: "12px 0 6px" }}>{auction.name}</h3>
                 <div className="muted">
-                  현재가 {auction.currentHighestBid.toLocaleString()}원
+                  현재가 {formatNumber(auction.currentHighestBid)}원
                 </div>
                 <div className="muted">
                   종료 {auction.endAt} · 입찰 {auction.bidCount}회

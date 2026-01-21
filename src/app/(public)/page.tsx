@@ -7,7 +7,7 @@ import { buildApiUrl, parseRsData } from "@/lib/api";
 type PostPreview = {
   id: number;
   title: string;
-  price: number;
+  price: number | null;
   categoryName: string;
   thumbnailUrl?: string;
   createDate: string;
@@ -16,10 +16,15 @@ type PostPreview = {
 type AuctionPreview = {
   auctionId: number;
   name: string;
-  currentHighestBid: number;
+  currentHighestBid: number | null;
   endAt: string;
   status: string;
   thumbnailUrl?: string;
+};
+
+const formatNumber = (value: number | null | undefined) => {
+  if (value === null || value === undefined) return "-";
+  return value.toLocaleString();
 };
 
 export default function MainPage() {
@@ -116,7 +121,7 @@ export default function MainPage() {
                   <Link key={post.id} className="panel" href={`/posts/${post.id}`}>
                     <div className="tag">{post.categoryName}</div>
                     <h4 style={{ margin: "12px 0 6px" }}>{post.title}</h4>
-                    <div className="muted">{post.price.toLocaleString()}원</div>
+                    <div className="muted">{formatNumber(post.price)}원</div>
                   </Link>
                 ))}
               </div>
@@ -142,7 +147,7 @@ export default function MainPage() {
                     <div className="tag">{auction.status}</div>
                     <h4 style={{ margin: "12px 0 6px" }}>{auction.name}</h4>
                     <div className="muted">
-                      현재 최고가 {auction.currentHighestBid.toLocaleString()}원
+                      현재 최고가 {formatNumber(auction.currentHighestBid)}원
                     </div>
                   </Link>
                 ))}

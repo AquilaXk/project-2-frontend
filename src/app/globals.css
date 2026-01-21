@@ -203,6 +203,12 @@ textarea {
   white-space: pre-line;
 }
 
+.success {
+  color: var(--accent);
+  font-size: 13px;
+  white-space: pre-line;
+}
+
 .empty {
   padding: 24px;
   text-align: center;
