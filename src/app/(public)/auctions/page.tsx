@@ -37,6 +37,40 @@ type AuctionPageData = {
   totalPages?: number;
 };
 
+type SearchItem = {
+  id: number;
+  type?: string;
+  title: string;
+  price: number | null;
+  status?: string;
+  categoryName?: string;
+  thumbnailUrl?: string;
+  createDate: string;
+};
+
+type SearchResponse = {
+  content?: SearchItem[];
+  page?: number;
+  size?: number;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+const CATEGORIES = [
+  { id: 1, name: "디지털기기" },
+  { id: 2, name: "생활가전" },
+  { id: 3, name: "가구/인테리어" },
+  { id: 4, name: "생활/주방" },
+  { id: 5, name: "여성의류" },
+  { id: 6, name: "남성패션/잡화" },
+  { id: 7, name: "유아동" },
+  { id: 8, name: "스포츠/레저" },
+  { id: 9, name: "도서" },
+  { id: 10, name: "게임/취미" },
+  { id: 11, name: "반려동물용품" },
+  { id: 12, name: "기타 중고물품" },
+];
+
 const formatNumber = (value: number | null | undefined) => {
   if (value === null || value === undefined) return "-";
   return value.toLocaleString();
@@ -45,9 +79,12 @@ const formatNumber = (value: number | null | undefined) => {
 export default function AuctionsPage() {
   const router = useRouter();
   const auth = useAuth();
-  const [status, setStatus] = useState("OPEN");
-  const [category, setCategory] = useState("");
-  const [sort, setSort] = useState("");
+  const [keywordInput, setKeywordInput] = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [status, setStatus] = useState("all");
+  const [categoryInput, setCategoryInput] = useState("");
+  const [categoryName, setCategoryName] = useState<string | null>(null);
+  const [sort, setSort] = useState("LATEST");
   const [page, setPage] = useState(0);
   const [size, setSize] = useState(20);
   const [auctions, setAuctions] = useState<AuctionItem[]>([]);
@@ -59,9 +96,17 @@ export default function AuctionsPage() {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("size", String(size));
-    if (status) params.set("status", status);
-    if (category.trim()) params.set("category", category.trim());
-    if (sort.trim()) params.set("sort", sort.trim());
+    if (status && status !== "all") params.set("status", status);
+    if (categoryName) {
+      params.set("category", categoryName);
+    } else if (categoryInput.trim()) {
+      params.set("category", categoryInput.trim());
+    }
+    if (sort === "LATEST") {
+      params.set("sort", "createDate,desc");
+    } else if (sort === "OLDEST") {
+      params.set("sort", "createDate,asc");
+    }
     return params.toString();
   };
 
@@ -71,8 +116,20 @@ export default function AuctionsPage() {
       setIsLoading(true);
       setErrorMessage(null);
       try {
-        const { rsData, errorMessage: apiError, response } =
-          await apiRequest<AuctionPageData>(`/api/v1/auctions?${buildQuery()}`);
+        const params = new URLSearchParams();
+        params.set("page", String(page));
+        params.set("size", String(size));
+        if (sort === "LATEST") {
+          params.set("sort", "createDate,desc");
+        } else if (sort === "OLDEST") {
+          params.set("sort", "createDate,asc");
+        }
+        const endpoint = keyword
+          ? `/api/v1/search?keyword=${encodeURIComponent(keyword)}&${params.toString()}`
+          : `/api/v1/auctions?${buildQuery()}`;
+        const { rsData, errorMessage: apiError, response } = keyword
+          ? await apiRequest<SearchResponse>(endpoint)
+          : await apiRequest<AuctionPageData>(endpoint);
         if (!isMounted) return;
         if (!response.ok || apiError || !rsData) {
           setAuctions([]);
@@ -80,13 +137,43 @@ export default function AuctionsPage() {
           setErrorMessage(apiError || "목록을 불러오지 못했습니다.");
           return;
         }
-        setAuctions(rsData.data?.content || []);
-        setPageData({
-          page: rsData.data?.page || page,
-          size: rsData.data?.size || size,
-          totalElements: rsData.data?.totalElements || 0,
-          totalPages: rsData.data?.totalPages || 0,
-        });
+        if (keyword) {
+          const content =
+            (rsData as { data?: SearchResponse }).data?.content ?? [];
+          const filtered = content.filter(
+            (item) => !item.type || item.type === "AUCTION"
+          );
+          setAuctions(
+            filtered.map((item) => ({
+              auctionId: item.id,
+              name: item.title,
+              thumbnailUrl: item.thumbnailUrl,
+              startPrice: item.price ?? 0,
+              currentHighestBid: item.price ?? null,
+              status: item.status ?? "OPEN",
+              endAt: item.createDate,
+              bidCount: 0,
+              categoryName: item.categoryName,
+            }))
+          );
+          setPageData({
+            page: (rsData as { data?: SearchResponse }).data?.page || page,
+            size: (rsData as { data?: SearchResponse }).data?.size || size,
+            totalElements:
+              (rsData as { data?: SearchResponse }).data?.totalElements || 0,
+            totalPages:
+              (rsData as { data?: SearchResponse }).data?.totalPages || 0,
+          });
+        } else {
+          const data = (rsData as { data?: AuctionPageData }).data;
+          setAuctions(data?.content || []);
+          setPageData({
+            page: data?.page || page,
+            size: data?.size || size,
+            totalElements: data?.totalElements || 0,
+            totalPages: data?.totalPages || 0,
+          });
+        }
       } catch {
         if (isMounted) {
           setAuctions([]);
@@ -103,7 +190,7 @@ export default function AuctionsPage() {
     return () => {
       isMounted = false;
     };
-  }, [status, category, sort, page, size]);
+  }, [status, categoryName, categoryInput, sort, page, size, keyword]);
 
   const handleWrite = () => {
     if (auth?.me) {
@@ -113,140 +200,218 @@ export default function AuctionsPage() {
     router.push("/login");
   };
 
+  const applySearch = () => {
+    setKeyword(keywordInput.trim());
+    setPage(0);
+  };
+
+  const resetFilters = () => {
+    setKeywordInput("");
+    setKeyword("");
+    setStatus("all");
+    setCategoryInput("");
+    setCategoryName(null);
+    setPage(0);
+  };
+
   return (
     <div className="page">
-      <section className="panel">
-        <h1 style={{ marginTop: 0 }}>경매 목록</h1>
-        <div className="field-row" style={{ marginTop: 16 }}>
-          <div className="field">
-            <label className="label" htmlFor="status">
-              상태
-            </label>
-            <select
-              id="status"
-              className="select"
-              value={status}
-              onChange={(event) => setStatus(event.target.value)}
+      <div style={{ display: "grid", gap: 24, gridTemplateColumns: "220px 1fr" }}>
+        <aside className="panel" style={{ alignSelf: "start" }}>
+          <h2 style={{ marginTop: 0 }}>카테고리</h2>
+          <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
+            <button
+              className="card"
+              style={{
+                textAlign: "left",
+                border:
+                  categoryName === null
+                    ? "2px solid var(--accent)"
+                    : "1px solid var(--border)",
+              }}
+              onClick={() => {
+                setCategoryName(null);
+                setCategoryInput("");
+                setPage(0);
+              }}
             >
-              <option value="OPEN">진행 중</option>
-              <option value="CLOSED">입찰 없음</option>
-              <option value="COMPLETED">낙찰 완료</option>
-              <option value="CANCELLED">취소됨</option>
-            </select>
-          </div>
-          <div className="field">
-            <label className="label" htmlFor="category">
-              카테고리
-            </label>
-            <input
-              id="category"
-              className="input"
-              value={category}
-              onChange={(event) => setCategory(event.target.value)}
-              placeholder="카테고리 입력"
-            />
-          </div>
-          <div className="field">
-            <label className="label" htmlFor="sort">
-              정렬
-            </label>
-            <input
-              id="sort"
-              className="input"
-              value={sort}
-              onChange={(event) => setSort(event.target.value)}
-              placeholder="예: endAt,desc"
-            />
-          </div>
-          <div className="field">
-            <label className="label" htmlFor="size">
-              페이지 크기
-            </label>
-            <input
-              id="size"
-              className="input"
-              type="number"
-              min={1}
-              value={size}
-              onChange={(event) => setSize(Number(event.target.value) || 20)}
-            />
-          </div>
-        </div>
-        <div className="actions" style={{ marginTop: 16 }}>
-          <button className="btn btn-primary" onClick={handleWrite}>
-            경매 등록
-          </button>
-          <button className="btn btn-ghost" onClick={() => setPage(0)}>
-            필터 초기화
-          </button>
-        </div>
-      </section>
-
-      <section style={{ marginTop: 24 }}>
-        {isLoading ? (
-          <Card>
-            <SkeletonLine width="70%" />
-            <SkeletonLine width="90%" style={{ marginTop: 12 }} />
-          </Card>
-        ) : errorMessage ? (
-          <ErrorMessage message={errorMessage} />
-        ) : auctions.length === 0 ? (
-          <EmptyState message="표시할 경매가 없습니다." />
-        ) : (
-          <div className="grid-3">
-            {auctions.map((auction) => (
-              <Link
-                key={auction.auctionId}
+              전체
+            </button>
+            {CATEGORIES.map((item) => (
+              <button
+                key={item.id}
                 className="card"
-                href={`/auctions/${auction.auctionId}`}
+                style={{
+                  textAlign: "left",
+                  border:
+                    categoryName === item.name
+                      ? "2px solid var(--accent)"
+                      : "1px solid var(--border)",
+                }}
+                onClick={() => {
+                  setCategoryName(item.name);
+                  setCategoryInput(item.name);
+                  setPage(0);
+                }}
               >
-                <div className="tag">
-                  {getAuctionStatusLabel(auction.status)}
-                </div>
-                <h3 style={{ margin: "12px 0 6px" }}>{auction.name}</h3>
-                <div className="muted">
-                  현재가 {formatNumber(auction.currentHighestBid)}원
-                </div>
-                <div className="muted">
-                  종료 {auction.endAt} · 입찰 {auction.bidCount}건
-                </div>
-                {auction.categoryName ? (
-                  <div className="tag" style={{ marginTop: 8 }}>
-                    {auction.categoryName}
-                  </div>
-                ) : null}
-              </Link>
+                {item.name}
+              </button>
             ))}
           </div>
-        )}
-        {pageData ? (
-          <div className="actions" style={{ marginTop: 16 }}>
-            <button
-              className="btn btn-ghost"
-              onClick={() => setPage((prev) => Math.max(prev - 1, 0))}
-              disabled={page <= 0}
-            >
-              이전
-            </button>
-            <span className="muted">
-              {page + 1} / {pageData.totalPages} (총 {pageData.totalElements}건)
-            </span>
-            <button
-              className="btn btn-ghost"
-              onClick={() =>
-                setPage((prev) =>
-                  pageData.totalPages
-                    ? Math.min(prev + 1, pageData.totalPages - 1)
-                    : prev + 1
-                )
-              }
-              disabled={pageData.totalPages > 0 && page >= pageData.totalPages - 1}
-            >
-              다음
-            </button>
-          </div>
-        ) : null}
-      </section>
+        </aside>
+        <div>
+          <section className="panel">
+            <h1 style={{ marginTop: 0 }}>경매 목록</h1>
+            <div className="field-row" style={{ marginTop: 16 }}>
+              <div className="field">
+                <label className="label" htmlFor="keyword">
+                  검색어
+                </label>
+                <input
+                  id="keyword"
+                  className="input"
+                  value={keywordInput}
+                  onChange={(event) => setKeywordInput(event.target.value)}
+                  placeholder="경매명/경매내용으로 검색"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") applySearch();
+                  }}
+                />
+              </div>
+              <div className="field">
+                <label className="label" htmlFor="status">
+                  상태
+                </label>
+                <select
+                  id="status"
+                  className="select"
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value)}
+                >
+                  <option value="all">전체</option>
+                  <option value="OPEN">진행 중</option>
+                  <option value="CLOSED">입찰 없음</option>
+                  <option value="COMPLETED">낙찰 완료</option>
+                  <option value="CANCELLED">취소됨</option>
+                </select>
+              </div>
+              <div className="field">
+                <label className="label" htmlFor="category">
+                  카테고리
+                </label>
+                <input
+                  id="category"
+                  className="input"
+                  value={categoryInput}
+                  onChange={(event) => {
+                    setCategoryInput(event.target.value);
+                    setCategoryName(null);
+                  }}
+                  placeholder="카테고리 입력"
+                />
+              </div>
+              <div className="field">
+                <label className="label" htmlFor="sort">
+                  정렬
+                </label>
+                <select
+                  id="sort"
+                  className="select"
+                  value={sort}
+                  onChange={(event) => setSort(event.target.value)}
+                >
+                  <option value="LATEST">최신순</option>
+                  <option value="OLDEST">오래된순</option>
+                </select>
+              </div>
+              <div className="field">
+                <label className="label" htmlFor="size">
+                  페이지 크기
+                </label>
+                <input
+                  id="size"
+                  className="input"
+                  type="number"
+                  min={1}
+                  value={size}
+                  onChange={(event) => setSize(Number(event.target.value) || 20)}
+                />
+              </div>
+            </div>
+            <div className="actions" style={{ marginTop: 16 }}>
+              <button className="btn btn-primary" onClick={applySearch}>
+                검색 적용
+              </button>
+              <button className="btn btn-primary" onClick={handleWrite}>
+                경매 등록
+              </button>
+              <button className="btn btn-ghost" onClick={resetFilters}>
+                필터 초기화
+              </button>
+            </div>
+          </section>
+
+          <section style={{ marginTop: 24 }}>
+            {isLoading ? (
+              <Card>
+                <SkeletonLine width="70%" />
+                <SkeletonLine width="90%" style={{ marginTop: 12 }} />
+              </Card>
+            ) : errorMessage ? (
+              <ErrorMessage message={errorMessage} />
+            ) : auctions.length === 0 ? (
+              <EmptyState message="표시할 경매가 없습니다." />
+            ) : (
+              <div className="grid-3">
+                {auctions.map((auction) => (
+                  <Link
+                    key={auction.auctionId}
+                    className="card"
+                    href={`/auctions/${auction.auctionId}`}
+                  >
+                    <div className="tag">{auction.categoryName || "경매"}</div>
+                    <h3 style={{ margin: "12px 0 6px" }}>{auction.name}</h3>
+                    <div className="muted">
+                      {formatNumber(auction.currentHighestBid)}원 ·{" "}
+                      {getAuctionStatusLabel(auction.status)} · {auction.endAt}
+                    </div>
+                    <div className="muted" style={{ marginTop: 6 }}>
+                      입찰 {formatNumber(auction.bidCount)}건
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+            {pageData ? (
+              <div className="actions" style={{ marginTop: 16 }}>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => setPage((prev) => Math.max(prev - 1, 0))}
+                  disabled={page <= 0}
+                >
+                  이전
+                </button>
+                <span className="muted">
+                  {page + 1} / {pageData.totalPages} (총 {pageData.totalElements}건)
+                </span>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() =>
+                    setPage((prev) =>
+                      pageData.totalPages
+                        ? Math.min(prev + 1, pageData.totalPages - 1)
+                        : prev + 1
+                    )
+                  }
+                  disabled={pageData.totalPages > 0 && page >= pageData.totalPages - 1}
+                >
+                  다음
+                </button>
+              </div>
+            ) : null}
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

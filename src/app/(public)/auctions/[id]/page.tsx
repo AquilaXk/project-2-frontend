@@ -753,6 +753,16 @@ export default function AuctionDetailPage() {
             판매자 <strong>{auction.seller.nickname}</strong> (평점{" "}
             {auction.seller.reputationScore})
           </div>
+          {auction.seller.id ? (
+            <div className="actions" style={{ marginTop: 8 }}>
+              <Link
+                className="btn btn-ghost"
+                href={`/members/${auction.seller.id}/reviews`}
+              >
+                판매자 리뷰 보기
+              </Link>
+            </div>
+          ) : null}
           {!isSeller ? (
             <Panel style={{ marginTop: 16 }}>
               <div className="actions">

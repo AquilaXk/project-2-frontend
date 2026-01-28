@@ -8,6 +8,7 @@ import { apiRequest, buildApiUrl, getAuthHeaders, safeJson } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { Panel } from "@/components/ui/Panel";
 import { SkeletonLine } from "@/components/ui/SkeletonLine";
 
 type ChatDto = {
@@ -25,6 +26,7 @@ type ChatDto = {
 type ChatListItem = {
   roomId: string;
   itemId: number;
+  opponentId?: number;
   opponentNickname?: string;
   opponentProfileImageUrl?: string;
   lastMessage?: string;
@@ -39,6 +41,7 @@ type ChatListItem = {
 type RoomSummary = {
   roomId: string;
   itemId: number;
+  opponentId?: number;
   opponentNickname?: string;
   opponentProfileImageUrl?: string;
   lastMessage?: string;
@@ -77,9 +80,18 @@ export default function ChatPage() {
   const [selectedImagesError, setSelectedImagesError] = useState<string | null>(
     null
   );
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const lastChatIdRef = useRef<number | null>(null);
   const [isOlderLoading, setIsOlderLoading] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewStar, setReviewStar] = useState("5");
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewSuccess, setReviewSuccess] = useState<string | null>(null);
+  const [isReviewSubmitting, setIsReviewSubmitting] = useState(false);
 
   const pendingRoomId = searchParams?.get("roomId");
   const pendingItemId = searchParams?.get("itemId");
@@ -88,6 +100,16 @@ export default function ChatPage() {
     () => rooms.find((room) => room.roomId === selectedRoomId) || null,
     [rooms, selectedRoomId]
   );
+
+  const reviewStorageKey = useMemo(() => {
+    if (!selectedRoomId || !selectedRoom?.opponentId) return null;
+    return `reviewed:${selectedRoomId}:${selectedRoom.opponentId}`;
+  }, [selectedRoomId, selectedRoom?.opponentId]);
+
+  const hasReviewed = useMemo(() => {
+    if (!reviewStorageKey || typeof window === "undefined") return false;
+    return localStorage.getItem(reviewStorageKey) === "1";
+  }, [reviewStorageKey]);
 
   useEffect(() => {
     if (pendingRoomId && !selectedRoomId) {
@@ -116,6 +138,7 @@ export default function ChatPage() {
         const mappedRooms = roomItems.map((room) => ({
           roomId: room.roomId,
           itemId: room.itemId,
+          opponentId: room.opponentId,
           opponentNickname: room.opponentNickname,
           opponentProfileImageUrl: room.opponentProfileImageUrl,
           lastMessage: room.lastMessage,
@@ -173,6 +196,9 @@ export default function ChatPage() {
     setPendingImages([]);
     setSelectedImagesError(null);
     setSendError(null);
+    setIsReviewOpen(false);
+    setReviewError(null);
+    setReviewSuccess(null);
     let isMounted = true;
     const fetchMessages = async () => {
       setIsMessagesLoading(true);
@@ -210,6 +236,18 @@ export default function ChatPage() {
       isMounted = false;
     };
   }, [selectedRoomId, messagesRefreshTick]);
+
+  useEffect(() => {
+    if (!selectedRoomId) return;
+    if (!shouldAutoScroll) return;
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const scrollToBottom = () => {
+      container.scrollTo({ top: container.scrollHeight, behavior: "auto" });
+    };
+    scrollToBottom();
+    requestAnimationFrame(scrollToBottom);
+  }, [messages, selectedRoomId, shouldAutoScroll]);
 
   const handleSend = async () => {
     if (
@@ -289,7 +327,6 @@ export default function ChatPage() {
       });
       setMessageText("");
       setPendingImages([]);
-      setMessagesRefreshTick((prev) => prev + 1);
     } catch {
       setSendError("네트워크 오류가 발생했습니다.");
     } finally {
@@ -327,6 +364,44 @@ export default function ChatPage() {
       setMessagesError("네트워크 오류가 발생했습니다.");
     } finally {
       setIsOlderLoading(false);
+    }
+  };
+
+  const handleReviewSubmit = async () => {
+    if (!selectedRoom?.opponentId || hasReviewed || isReviewSubmitting) return;
+    const star = Number(reviewStar);
+    if (!Number.isFinite(star) || star < 1 || star > 5) {
+      setReviewError("별점은 1~5 사이여야 합니다.");
+      return;
+    }
+    setIsReviewSubmitting(true);
+    setReviewError(null);
+    setReviewSuccess(null);
+    try {
+      const { rsData, errorMessage, response } = await apiRequest<null>(
+        `/api/v1/members/${selectedRoom.opponentId}/review`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            star,
+            comment: reviewComment.trim() || null,
+          }),
+        }
+      );
+      if (!response.ok || errorMessage || !rsData) {
+        setReviewError(errorMessage || rsData?.msg || "리뷰 등록에 실패했습니다.");
+        return;
+      }
+      if (reviewStorageKey && typeof window !== "undefined") {
+        localStorage.setItem(reviewStorageKey, "1");
+      }
+      setReviewSuccess(rsData.msg || "리뷰 작성이 완료되었습니다.");
+      setIsReviewOpen(false);
+    } catch {
+      setReviewError("네트워크 오류가 발생했습니다.");
+    } finally {
+      setIsReviewSubmitting(false);
     }
   };
 
@@ -471,7 +546,22 @@ export default function ChatPage() {
           ) : messages.length === 0 ? (
             <EmptyState message="메시지가 없습니다." />
           ) : (
-            <div style={{ display: "grid", gap: 12 }}>
+            <div
+              ref={messagesContainerRef}
+              style={{
+                display: "grid",
+                gap: 12,
+                maxHeight: "60vh",
+                overflowY: "auto",
+                paddingRight: 6,
+              }}
+              onScroll={(event) => {
+                const target = event.currentTarget;
+                const distanceFromBottom =
+                  target.scrollHeight - target.scrollTop - target.clientHeight;
+                setShouldAutoScroll(distanceFromBottom < 80);
+              }}
+            >
               {messages.map((message, index) => (
                 <div key={`${message.id ?? index}-${message.createDate}`}>
                   <div className="muted">
@@ -496,10 +586,85 @@ export default function ChatPage() {
                   ) : null}
                 </div>
               ))}
+              <div ref={messagesEndRef} />
             </div>
           )}
           {selectedRoomId ? (
             <div style={{ marginTop: 16 }}>
+              <Panel style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div className="muted">
+                    리뷰 대상:{" "}
+                    {selectedRoom?.opponentNickname ||
+                      (selectedRoom?.opponentId
+                        ? `회원 #${selectedRoom.opponentId}`
+                        : "-")}
+                  </div>
+                  {hasReviewed ? (
+                    <span className="tag">리뷰 완료</span>
+                  ) : (
+                    <button
+                      className="btn btn-ghost"
+                      type="button"
+                      onClick={() => setIsReviewOpen((prev) => !prev)}
+                    >
+                      리뷰 남기기
+                    </button>
+                  )}
+                </div>
+                {isReviewOpen && !hasReviewed ? (
+                  <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                    <div className="field">
+                      <label className="label" htmlFor="review-star">
+                        별점
+                      </label>
+                      <select
+                        id="review-star"
+                        className="select"
+                        value={reviewStar}
+                        onChange={(event) => setReviewStar(event.target.value)}
+                        disabled={isReviewSubmitting}
+                      >
+                        <option value="5">5점</option>
+                        <option value="4">4점</option>
+                        <option value="3">3점</option>
+                        <option value="2">2점</option>
+                        <option value="1">1점</option>
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label className="label" htmlFor="review-comment">
+                        코멘트(선택)
+                      </label>
+                      <textarea
+                        id="review-comment"
+                        className="textarea"
+                        rows={3}
+                        value={reviewComment}
+                        onChange={(event) => setReviewComment(event.target.value)}
+                        placeholder="상대방에 대한 간단한 후기를 남겨주세요"
+                        disabled={isReviewSubmitting}
+                      />
+                    </div>
+                    {reviewError ? (
+                      <ErrorMessage message={reviewError} />
+                    ) : null}
+                    {reviewSuccess ? (
+                      <div className="success">{reviewSuccess}</div>
+                    ) : null}
+                    <div className="actions">
+                      <button
+                        className="btn btn-primary"
+                        type="button"
+                        onClick={handleReviewSubmit}
+                        disabled={isReviewSubmitting}
+                      >
+                        {isReviewSubmitting ? "등록 중..." : "리뷰 등록"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </Panel>
               <div className="field">
                 <label className="label" htmlFor="messageText">
                   메시지 입력

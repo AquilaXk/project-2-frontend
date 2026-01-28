@@ -594,7 +594,12 @@ export default function MyPage() {
           ) : (
             <div style={{ display: "grid", gap: 12 }}>
               {posts.map((post) => (
-                <div key={post.id} className="card">
+                <button
+                  key={post.id}
+                  className="card"
+                  style={{ textAlign: "left" }}
+                  onClick={() => router.push(`/posts/${post.id}`)}
+                >
                   <div className="muted">
                     {post.statusDisplayName || post.status}
                   </div>
@@ -607,7 +612,7 @@ export default function MyPage() {
                       {post.sellerBadge}
                     </div>
                   ) : null}
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -674,14 +679,19 @@ export default function MyPage() {
           ) : (
             <div style={{ display: "grid", gap: 12 }}>
               {auctions.map((auction) => (
-                <div key={auction.auctionId} className="card">
+                <button
+                  key={auction.auctionId}
+                  className="card"
+                  style={{ textAlign: "left" }}
+                  onClick={() => router.push(`/auctions/${auction.auctionId}`)}
+                >
                   <div className="muted">{auction.status}</div>
                   <div style={{ marginTop: 6 }}>{auction.name}</div>
                   <div className="muted" style={{ marginTop: 6 }}>
                     현재가 {formatNumber(auction.currentHighestBid)}원 · 입찰{" "}
                     {auction.bidCount}건
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -720,6 +730,15 @@ export default function MyPage() {
       <div className="grid-2" style={{ marginTop: 24 }}>
         <Card>
           <h2 style={{ marginTop: 0 }}>내 리뷰</h2>
+          <div className="actions" style={{ marginTop: 8, marginBottom: 8 }}>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => router.push(`/members/${me.id}/reviews`)}
+            >
+              내 리뷰 보기
+            </button>
+          </div>
           {isReviewsLoading ? (
             <SkeletonLine width="70%" />
           ) : reviewsError ? (
@@ -727,7 +746,15 @@ export default function MyPage() {
           ) : reviews.length === 0 ? (
             <EmptyState message="아직 받은 리뷰가 없습니다." />
           ) : (
-            <div style={{ display: "grid", gap: 12 }}>
+            <div
+              style={{
+                display: "grid",
+                gap: 12,
+                maxHeight: 320,
+                overflowY: "auto",
+                paddingRight: 6,
+              }}
+            >
               {reviews.map((review) => (
                 <div key={review.id} className="card">
                   <div className="muted">평점 {review.score}</div>

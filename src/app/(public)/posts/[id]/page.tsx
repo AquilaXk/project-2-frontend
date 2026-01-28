@@ -56,6 +56,9 @@ export default function PostDetailPage() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [statusSuccess, setStatusSuccess] = useState<string | null>(null);
   const [isStatusUpdating, setIsStatusUpdating] = useState(false);
+  const [isReporting, setIsReporting] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportSuccess, setReportSuccess] = useState<string | null>(null);
 
   const postId = useMemo(() => {
     const raw = params?.id;
@@ -228,6 +231,29 @@ export default function PostDetailPage() {
     }
   };
 
+  const handleReportSeller = async () => {
+    if (!post?.sellerId || isReporting) return;
+    if (!confirm("판매자를 신고하시겠습니까?")) return;
+    setIsReporting(true);
+    setReportError(null);
+    setReportSuccess(null);
+    try {
+      const { rsData, errorMessage: apiError, response } =
+        await apiRequest<null>(`/api/v1/members/${post.sellerId}/credit`, {
+          method: "PATCH",
+        });
+      if (!response.ok || apiError || !rsData) {
+        setReportError(apiError || "신고에 실패했습니다.");
+        return;
+      }
+      setReportSuccess(rsData.msg || "신고가 접수되었습니다.");
+    } catch {
+      setReportError("네트워크 오류가 발생했습니다.");
+    } finally {
+      setIsReporting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -290,6 +316,16 @@ export default function PostDetailPage() {
           <div style={{ marginTop: 16 }}>
             판매자 <strong>{post.sellerNickname}</strong>
           </div>
+          {post.sellerId ? (
+            <div className="actions" style={{ marginTop: 8 }}>
+              <Link
+                className="btn btn-ghost"
+                href={`/members/${post.sellerId}/reviews`}
+              >
+                판매자 리뷰 보기
+              </Link>
+            </div>
+          ) : null}
           <div className="muted" style={{ marginTop: 6 }}>
             신용 점수 {post.sellerScore ?? "-"}
           </div>
@@ -331,6 +367,28 @@ export default function PostDetailPage() {
               </>
             ) : null}
           </div>
+          {!isSeller && post.sellerId ? (
+            <Panel style={{ marginTop: 16 }}>
+              <div className="actions">
+                <button
+                  className="btn btn-danger"
+                  type="button"
+                  onClick={handleReportSeller}
+                  disabled={isReporting}
+                >
+                  {isReporting ? "신고 중..." : "판매자 신고"}
+                </button>
+              </div>
+              {reportError ? (
+                <ErrorMessage message={reportError} style={{ marginTop: 8 }} />
+              ) : null}
+              {reportSuccess ? (
+                <div className="success" style={{ marginTop: 8 }}>
+                  {reportSuccess}
+                </div>
+              ) : null}
+            </Panel>
+          ) : null}
           {isSeller ? (
             <Panel style={{ marginTop: 16 }}>
               <div className="field">
