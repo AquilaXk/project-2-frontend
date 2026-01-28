@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthContext";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, buildApiUrl } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
@@ -75,6 +75,12 @@ const CATEGORIES = [
 const formatNumber = (value: number | null | undefined) => {
   if (value === null || value === undefined) return "-";
   return value.toLocaleString();
+};
+
+const resolveImageUrl = (url?: string | null) => {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return buildApiUrl(url);
 };
 
 export default function PostsPage() {
@@ -373,6 +379,37 @@ export default function PostsPage() {
               <div className="grid-3">
                 {visiblePosts.map((post) => (
                   <Link key={post.id} className="card" href={`/posts/${post.id}`}>
+                    <div
+                      style={{
+                        width: "100%",
+                        aspectRatio: "1 / 1",
+                        marginBottom: 12,
+                        borderRadius: 12,
+                        overflow: "hidden",
+                        background: "var(--surface)",
+                        border: "1px solid var(--border)",
+                        display: "grid",
+                        placeItems: "center",
+                        color: "var(--muted)",
+                        fontSize: 12,
+                      }}
+                    >
+                      {resolveImageUrl(post.thumbnailUrl) ? (
+                        <img
+                          src={resolveImageUrl(post.thumbnailUrl) ?? ""}
+                          alt={`${post.title} 썸네일`}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            objectPosition: "50% 50%",
+                            display: "block",
+                          }}
+                        />
+                      ) : (
+                        "썸네일 없음"
+                      )}
+                    </div>
                     <div className="tag">{post.categoryName || "중고거래"}</div>
                     <h3 style={{ margin: "12px 0 6px" }}>{post.title}</h3>
                     <div className="muted">

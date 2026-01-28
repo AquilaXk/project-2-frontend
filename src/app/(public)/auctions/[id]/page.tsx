@@ -411,7 +411,7 @@ export default function AuctionDetailPage() {
         {
           method: "POST",
           headers: getAuthHeaders(),
-          credentials: "omit",
+          credentials: "include",
         }
       );
       const json = await safeJson<{

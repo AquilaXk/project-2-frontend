@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthContext";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, buildApiUrl } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
@@ -74,6 +74,12 @@ const CATEGORIES = [
 const formatNumber = (value: number | null | undefined) => {
   if (value === null || value === undefined) return "-";
   return value.toLocaleString();
+};
+
+const resolveImageUrl = (url?: string | null) => {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return buildApiUrl(url);
 };
 
 export default function AuctionsPage() {
@@ -369,6 +375,37 @@ export default function AuctionsPage() {
                     className="card"
                     href={`/auctions/${auction.auctionId}`}
                   >
+                    <div
+                      style={{
+                        width: "100%",
+                        aspectRatio: "1 / 1",
+                        marginBottom: 12,
+                        borderRadius: 12,
+                        overflow: "hidden",
+                        background: "var(--surface)",
+                        border: "1px solid var(--border)",
+                        display: "grid",
+                        placeItems: "center",
+                        color: "var(--muted)",
+                        fontSize: 12,
+                      }}
+                    >
+                      {resolveImageUrl(auction.thumbnailUrl) ? (
+                        <img
+                          src={resolveImageUrl(auction.thumbnailUrl) ?? ""}
+                          alt={`${auction.name} 썸네일`}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            objectPosition: "50% 50%",
+                            display: "block",
+                          }}
+                        />
+                      ) : (
+                        "썸네일 없음"
+                      )}
+                    </div>
                     <div className="tag">{auction.categoryName || "경매"}</div>
                     <h3 style={{ margin: "12px 0 6px" }}>{auction.name}</h3>
                     <div className="muted">

@@ -47,7 +47,7 @@ export default function MemberReviewsPage() {
           {
             method: "GET",
             headers: getAuthHeaders(),
-            credentials: "omit",
+            credentials: "include",
           }
         );
         if (!response.ok) {

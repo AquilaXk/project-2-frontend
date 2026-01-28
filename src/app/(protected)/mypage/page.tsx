@@ -106,6 +106,9 @@ export default function MyPage() {
   const [postsPage, setPostsPage] = useState<PostPageResponse | null>(null);
   const [postsError, setPostsError] = useState<string | null>(null);
   const [isPostsLoading, setIsPostsLoading] = useState(false);
+  const [isPostStatusUpdating, setIsPostStatusUpdating] = useState(false);
+  const [postStatusError, setPostStatusError] = useState<string | null>(null);
+  const [postsRefreshTick, setPostsRefreshTick] = useState(0);
 
   const [auctionStatusFilter, setAuctionStatusFilter] = useState("OPEN");
   const [auctionPage, setAuctionPage] = useState(0);
@@ -128,7 +131,7 @@ export default function MyPage() {
       const response = await fetch(buildApiUrl("/api/v1/members/me"), {
         method: "GET",
         headers: getAuthHeaders(),
-        credentials: "omit",
+        credentials: "include",
       });
         if (!response.ok) {
           setErrorMessage("내 정보를 불러오지 못했습니다.");
@@ -205,7 +208,7 @@ export default function MyPage() {
     return () => {
       isMounted = false;
     };
-  }, [me, postPage, postStatusFilter]);
+  }, [me, postPage, postStatusFilter, postsRefreshTick]);
 
   useEffect(() => {
     if (!me) return;
@@ -263,7 +266,7 @@ export default function MyPage() {
           {
             method: "GET",
             headers: getAuthHeaders(),
-            credentials: "omit",
+            credentials: "include",
           }
         );
         if (!response.ok) {
@@ -395,6 +398,29 @@ export default function MyPage() {
       setWithdrawError("네트워크 오류가 발생했습니다.");
     } finally {
       setIsWithdrawing(false);
+    }
+  };
+
+  const handlePostStatusUpdate = async (postId: number, status: string) => {
+    if (isPostStatusUpdating) return;
+    setIsPostStatusUpdating(true);
+    setPostStatusError(null);
+    try {
+      const { rsData, errorMessage: apiError, response } =
+        await apiRequest<{ id: number }>(`/api/v1/posts/${postId}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
+      if (!response.ok || apiError || !rsData) {
+        setPostStatusError(apiError || "상태 변경에 실패했습니다.");
+        return;
+      }
+      setPostsRefreshTick((prev) => prev + 1);
+    } catch {
+      setPostStatusError("네트워크 오류가 발생했습니다.");
+    } finally {
+      setIsPostStatusUpdating(false);
     }
   };
 
@@ -612,10 +638,26 @@ export default function MyPage() {
                       {post.sellerBadge}
                     </div>
                   ) : null}
+                  <div className="actions" style={{ marginTop: 8 }}>
+                    <button
+                      className="btn btn-ghost"
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handlePostStatusUpdate(post.id, "SOLD");
+                      }}
+                      disabled={isPostStatusUpdating || post.status === "SOLD"}
+                    >
+                      {post.status === "SOLD" ? "판매 완료" : "판매 완료 처리"}
+                    </button>
+                  </div>
                 </button>
               ))}
             </div>
           )}
+          {postStatusError ? (
+            <ErrorMessage message={postStatusError} style={{ marginTop: 8 }} />
+          ) : null}
           {postsPage ? (
             <div className="actions" style={{ marginTop: 12 }}>
               <button

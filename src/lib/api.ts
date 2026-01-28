@@ -76,7 +76,7 @@ export async function apiRequest<T>(
   const response = await fetch(buildApiUrl(path), {
     ...init,
     headers,
-    credentials: init.credentials ?? "omit",
+    credentials: init.credentials ?? "include",
   });
   const { rsData, errorMessage } = await parseRsData<T>(response);
   return { rsData, errorMessage, response };

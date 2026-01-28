@@ -271,7 +271,7 @@ export default function ChatPage() {
       const response = await fetch(buildApiUrl("/api/v1/chat/send"), {
         method: "POST",
         headers: getAuthHeaders(),
-        credentials: "omit",
+        credentials: "include",
         body: formData,
       });
       if (!response.ok) {

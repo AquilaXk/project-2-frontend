@@ -7,17 +7,10 @@ export async function fetchMe(): Promise<{
   errorMessage: string | null;
 }> {
   try {
-    if (typeof window !== "undefined") {
-      const apiKey = localStorage.getItem("buyerApiKey")?.trim();
-      const accessToken = localStorage.getItem("accessToken")?.trim();
-      if (!apiKey && !accessToken) {
-        return { ok: false, me: null, errorMessage: null };
-      }
-    }
     const response = await fetch(buildApiUrl("/api/v1/members/me"), {
       method: "GET",
       headers: getAuthHeaders(),
-      credentials: "omit",
+      credentials: "include",
     });
     if (!response.ok) {
       return { ok: false, me: null, errorMessage: "인증이 필요합니다." };
