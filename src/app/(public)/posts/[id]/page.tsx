@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth/AuthContext";
 import {
   apiRequest,
   buildApiUrl,
+  getAuthHeaders,
   isSuccessResultCode,
   safeJson,
 } from "@/lib/api";
@@ -150,7 +151,8 @@ export default function PostDetailPage() {
         buildApiUrl(`/api/v1/chat/room?${query.toString()}`),
         {
           method: "POST",
-          credentials: "include",
+          headers: getAuthHeaders(),
+          credentials: "omit",
         }
       );
       const json = await safeJson<{

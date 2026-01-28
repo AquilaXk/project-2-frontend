@@ -111,8 +111,16 @@ export default function PostEditPage() {
     if (!form.categoryId || Number.isNaN(categoryId)) {
       errors.categoryId = "카테고리를 입력해 주세요.";
     }
-    if (!title) errors.title = "제목은 필수입니다.";
-    if (!content) errors.content = "내용은 필수입니다.";
+    if (!title) {
+      errors.title = "제목은 필수입니다.";
+    } else if (title.length < 2 || title.length > 50) {
+      errors.title = "제목은 2자 이상 50자 이하로 입력해 주세요.";
+    }
+    if (!content) {
+      errors.content = "내용은 필수입니다.";
+    } else if (content.length < 10 || content.length > 1000) {
+      errors.content = "내용은 10자 이상 1000자 이하로 입력해 주세요.";
+    }
     if (form.price && (Number.isNaN(price) || price === null || price < 0)) {
       errors.price = "가격은 0 이상 숫자여야 합니다.";
     }
@@ -147,7 +155,12 @@ export default function PostEditPage() {
         });
       if (!response.ok || !rsData || apiError) {
         if (rsData?.resultCode === "400-1" && rsData.msg) {
-          setFieldErrors(parseFieldErrors(rsData.msg));
+          const parsed = parseFieldErrors(rsData.msg);
+          if (Object.keys(parsed).length > 0) {
+            setFieldErrors(parsed);
+          } else {
+            setErrorMessage(rsData.msg);
+          }
         } else {
           setErrorMessage(apiError || rsData?.msg || "수정에 실패했습니다.");
         }

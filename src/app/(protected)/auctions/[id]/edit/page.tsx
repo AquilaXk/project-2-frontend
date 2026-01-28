@@ -112,8 +112,8 @@ export default function AuctionEditPage() {
           return;
         }
         setForm({
-          name: data.name  "",
-          description: data.description  "",
+          name: data.name ?? "",
+          description: data.description ?? "",
           startPrice:
             typeof data.startPrice === "number" ? String(data.startPrice) : "",
           buyNowPrice:
@@ -121,7 +121,7 @@ export default function AuctionEditPage() {
           endAt: toInputDateTime(data.endAt),
           images: [],
         });
-        const urls = data.imageUrls  [];
+        const urls = data.imageUrls ?? [];
         setExistingImageUrls(urls);
         setKeepImageUrls(urls);
       } catch {

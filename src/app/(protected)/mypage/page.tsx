@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiRequest, buildApiUrl, safeJson } from "@/lib/api";
+import { apiRequest, buildApiUrl, getAuthHeaders, safeJson } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
@@ -124,11 +124,12 @@ export default function MyPage() {
     const fetchMe = async () => {
       setIsLoading(true);
       setErrorMessage(null);
-      try {
-        const response = await fetch(buildApiUrl("/api/v1/members/me"), {
-          method: "GET",
-          credentials: "include",
-        });
+    try {
+      const response = await fetch(buildApiUrl("/api/v1/members/me"), {
+        method: "GET",
+        headers: getAuthHeaders(),
+        credentials: "omit",
+      });
         if (!response.ok) {
           setErrorMessage("내 정보를 불러오지 못했습니다.");
           return;
@@ -261,7 +262,8 @@ export default function MyPage() {
           buildApiUrl(`/api/v1/members/${me.id}/review`),
           {
             method: "GET",
-            credentials: "include",
+            headers: getAuthHeaders(),
+            credentials: "omit",
           }
         );
         if (!response.ok) {

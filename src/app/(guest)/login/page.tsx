@@ -62,8 +62,10 @@ export default function LoginPage() {
       const accessToken = json.data?.accessToken || json.accessToken;
       if (accessToken) {
         localStorage.setItem("wsAccessToken", accessToken);
+        localStorage.setItem("accessToken", accessToken);
       } else {
         localStorage.removeItem("wsAccessToken");
+        localStorage.removeItem("accessToken");
       }
       router.replace("/");
     } catch {

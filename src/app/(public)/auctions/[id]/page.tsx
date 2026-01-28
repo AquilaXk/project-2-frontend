@@ -8,6 +8,7 @@ import SockJS from "sockjs-client";
 import {
   apiRequest,
   buildApiUrl,
+  getAuthHeaders,
   isSuccessResultCode,
   safeJson,
 } from "@/lib/api";
@@ -116,11 +117,14 @@ export default function AuctionDetailPage() {
     const value = Array.isArray(raw) ? raw[0] : raw;
     return value ? Number(value) : null;
   }, [params]);
-  const winningBid = useMemo(() => {
-    const winnerId = auction?.winnerId;
-    if (!winnerId) return null;
-    return bids.find((bid) => bid.bidderId === winnerId) || null;
+  const resolvedWinnerId = useMemo(() => {
+    if (auction?.winnerId) return auction.winnerId;
+    return bids[0]?.bidderId ?? null;
   }, [auction?.winnerId, bids]);
+  const winningBid = useMemo(() => {
+    if (!resolvedWinnerId) return null;
+    return bids.find((bid) => bid.bidderId === resolvedWinnerId) || null;
+  }, [resolvedWinnerId, bids]);
 
   const loadAuctionDetail = useCallback(async () => {
     if (!auctionId) {
@@ -218,15 +222,27 @@ export default function AuctionDetailPage() {
   useEffect(() => {
     if (!auctionId) return;
     if (typeof window === "undefined") return;
-    const accessToken = localStorage.getItem("wsAccessToken");
+    const accessToken =
+      localStorage.getItem("wsAccessToken")?.trim() ||
+      localStorage.getItem("accessToken")?.trim() ||
+      "";
     if (!accessToken) return;
 
     const client = new Client({
       webSocketFactory: () => new SockJS(buildApiUrl("/ws")),
       connectHeaders: {
-        Authorization: `Bearer ${accessToken}`,
+        token: `Bearer ${accessToken}`,
       },
       reconnectDelay: 5000,
+      debug: (message) => {
+        console.log("[stomp]", message);
+      },
+      onStompError: (frame) => {
+        console.error("[stomp:error]", frame.headers["message"], frame.body);
+      },
+      onWebSocketClose: (event) => {
+        console.warn("[stomp:ws-close]", event.code, event.reason);
+      },
       onConnect: () => {
         client.subscribe(`/sub/v1/auctions/${auctionId}`, (message) => {
           if (!message.body) return;
@@ -394,7 +410,8 @@ export default function AuctionDetailPage() {
         buildApiUrl(`/api/v1/chat/room?${query.toString()}`),
         {
           method: "POST",
-          credentials: "include",
+          headers: getAuthHeaders(),
+          credentials: "omit",
         }
       );
       const json = await safeJson<{
@@ -466,7 +483,8 @@ export default function AuctionDetailPage() {
   }
 
   const isSeller = auth?.me?.id === auction.seller.id;
-  const isWinner = auth?.me?.id === auction.winnerId;
+  const isWinner =
+    resolvedWinnerId !== null && auth?.me?.id === resolvedWinnerId;
   const isAuctionOpen = auction.status === "OPEN";
   const isAuctionCompleted = auction.status === "COMPLETED";
   const isEditable =
@@ -483,12 +501,12 @@ export default function AuctionDetailPage() {
   const shouldShowCancelTrade = isAuctionCompleted;
   const winnerNickname =
     winningBid?.bidderNickname ||
-    (auction.winnerId ? `회원 #${auction.winnerId}` : "-");
+    (resolvedWinnerId ? `회원 #${resolvedWinnerId}` : "-");
   const winningPrice =
     winningBid?.price ?? auction.currentHighestBid ?? null;
   const winningAt = winningBid?.createdAt ?? auction.closedAt ?? null;
   const canStartChat =
-    isAuctionCompleted && (isWinner || isSeller) && !!auction.winnerId;
+    isAuctionCompleted && (isWinner || isSeller) && !!resolvedWinnerId;
 
   return (
     <div className="page">

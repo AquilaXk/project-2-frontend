@@ -1,4 +1,4 @@
-import { buildApiUrl, safeJson } from "@/lib/api";
+import { buildApiUrl, getAuthHeaders, safeJson } from "@/lib/api";
 import type { MemberMe } from "@/components/auth/AuthContext";
 
 export async function fetchMe(): Promise<{
@@ -7,9 +7,17 @@ export async function fetchMe(): Promise<{
   errorMessage: string | null;
 }> {
   try {
+    if (typeof window !== "undefined") {
+      const apiKey = localStorage.getItem("buyerApiKey")?.trim();
+      const accessToken = localStorage.getItem("accessToken")?.trim();
+      if (!apiKey && !accessToken) {
+        return { ok: false, me: null, errorMessage: null };
+      }
+    }
     const response = await fetch(buildApiUrl("/api/v1/members/me"), {
       method: "GET",
-      credentials: "include",
+      headers: getAuthHeaders(),
+      credentials: "omit",
     });
     if (!response.ok) {
       return { ok: false, me: null, errorMessage: "인증이 필요합니다." };

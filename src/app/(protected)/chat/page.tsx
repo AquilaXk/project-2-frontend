@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import { useSearchParams } from "next/navigation";
-import { apiRequest, buildApiUrl } from "@/lib/api";
+import { apiRequest, buildApiUrl, getAuthHeaders, safeJson } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
@@ -232,7 +232,8 @@ export default function ChatPage() {
       });
       const response = await fetch(buildApiUrl("/api/v1/chat/send"), {
         method: "POST",
-        credentials: "include",
+        headers: getAuthHeaders(),
+        credentials: "omit",
         body: formData,
       });
       if (!response.ok) {
@@ -249,8 +250,46 @@ export default function ChatPage() {
         setSendError(serverMessage || "메시지 전송에 실패했습니다.");
         return;
       }
+      const json = await safeJson<{
+        resultCode?: string;
+        msg?: string;
+        data?: { chatId?: number };
+      }>(response);
+      const chatId =
+        typeof json?.data?.chatId === "number" ? json.data.chatId : null;
+      const nowIso = new Date().toISOString();
+      const optimisticMessage: ChatDto = {
+        id: chatId ?? Date.now() * -1,
+        roomId: selectedRoomId,
+        itemId: selectedRoom?.itemId ?? Number(pendingItemId ?? 0) ?? 0,
+        message: messageText.trim(),
+        createDate: nowIso,
+        isRead: false,
+      };
+      setMessages((prev) => {
+        if (chatId && prev.some((msg) => msg.id === chatId)) {
+          return prev;
+        }
+        return [...prev, optimisticMessage];
+      });
+      setRooms((prev) => {
+        const next = prev.map((room) =>
+          room.roomId === selectedRoomId
+            ? {
+                ...room,
+                lastMessage: optimisticMessage.message,
+                lastMessageAt: nowIso,
+                unreadCount: 0,
+              }
+            : room
+        );
+        return next.sort(
+          (a, b) => toTimestamp(b.lastMessageAt) - toTimestamp(a.lastMessageAt)
+        );
+      });
       setMessageText("");
       setPendingImages([]);
+      setMessagesRefreshTick((prev) => prev + 1);
     } catch {
       setSendError("네트워크 오류가 발생했습니다.");
     } finally {
@@ -294,35 +333,55 @@ export default function ChatPage() {
   useEffect(() => {
     if (!selectedRoomId) return;
     if (typeof window === "undefined") return;
-    const accessToken = localStorage.getItem("wsAccessToken");
+    const accessToken =
+      localStorage.getItem("wsAccessToken")?.trim() ||
+      localStorage.getItem("accessToken")?.trim() ||
+      "";
     if (!accessToken) return;
 
     const client = new Client({
       webSocketFactory: () => new SockJS(buildApiUrl("/ws")),
       connectHeaders: {
-        Authorization: `Bearer ${accessToken}`,
+        token: `Bearer ${accessToken}`,
       },
       reconnectDelay: 5000,
+      debug: (message) => {
+        console.log("[stomp]", message);
+      },
+      onStompError: (frame) => {
+        console.error("[stomp:error]", frame.headers["message"], frame.body);
+      },
+      onWebSocketClose: (event) => {
+        console.warn("[stomp:ws-close]", event.code, event.reason);
+      },
       onConnect: () => {
         client.subscribe(`/sub/v1/chat/room/${selectedRoomId}`, (message) => {
           if (!message.body) return;
           try {
-            const data = JSON.parse(message.body) as ChatDto;
-            if (!data || !data.roomId) return;
-            if (data.roomId !== selectedRoomId) return;
+            const parsed = JSON.parse(message.body) as
+              | ChatDto
+              | { resultCode?: string; msg?: string; data?: ChatDto };
+            const data = (parsed as { data?: ChatDto }).data ?? (parsed as ChatDto);
+            if (!data) return;
+            if (data.roomId && data.roomId !== selectedRoomId) return;
+            const normalized: ChatDto = {
+              ...data,
+              id: data.id ?? undefined,
+              roomId: data.roomId ?? selectedRoomId,
+            };
             setMessages((prev) => {
-              if (prev.some((msg) => msg.id === data.id)) {
+              if (normalized.id && prev.some((msg) => msg.id === normalized.id)) {
                 return prev;
               }
-              return [...prev, data];
+              return [...prev, normalized];
             });
             setRooms((prev) => {
               const next = prev.map((room) =>
-                room.roomId === data.roomId
+                room.roomId === selectedRoomId
                   ? {
                       ...room,
-                      lastMessage: data.message,
-                      lastMessageAt: data.createDate,
+                      lastMessage: normalized.message,
+                      lastMessageAt: normalized.createDate,
                       unreadCount: 0,
                     }
                   : room

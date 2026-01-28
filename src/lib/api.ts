@@ -10,6 +10,22 @@ export type ApiResult<T> = {
   response: Response;
 };
 
+export function getAuthHeaders(init?: HeadersInit): HeadersInit {
+  const headers = new Headers(init || {});
+  if (typeof window === "undefined") {
+    return headers;
+  }
+  const apiKey = localStorage.getItem("buyerApiKey")?.trim();
+  const accessToken = localStorage.getItem("accessToken")?.trim();
+  if (apiKey || accessToken) {
+    const parts = ["Bearer"];
+    if (apiKey) parts.push(apiKey);
+    if (accessToken) parts.push(accessToken);
+    headers.set("Authorization", parts.join(" "));
+  }
+  return headers;
+}
+
 export function buildApiUrl(path: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (!baseUrl) return path;
@@ -56,9 +72,11 @@ export async function apiRequest<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<ApiResult<T>> {
+  const headers = getAuthHeaders(init.headers);
   const response = await fetch(buildApiUrl(path), {
     ...init,
-    credentials: init.credentials ?? "include",
+    headers,
+    credentials: init.credentials ?? "omit",
   });
   const { rsData, errorMessage } = await parseRsData<T>(response);
   return { rsData, errorMessage, response };

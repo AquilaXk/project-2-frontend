@@ -229,7 +229,7 @@ export default function AuctionWritePage() {
               type="file"
               multiple
               onChange={(event) =>
-                updateField("images", Array.from(event.target.files  []))
+                updateField("images", Array.from(event.target.files ?? []))
               }
             />
           </div>

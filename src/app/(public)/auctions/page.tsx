@@ -77,7 +77,7 @@ export default function AuctionsPage() {
         if (!response.ok || apiError || !rsData) {
           setAuctions([]);
           setPageData(null);
-          setErrorMessage(apiError || "목록을 불러오지 못했습니다.
+          setErrorMessage(apiError || "목록을 불러오지 못했습니다.");
           return;
         }
         setAuctions(rsData.data?.content || []);

@@ -63,6 +63,7 @@ export default function ProtectedLayout({
       }
       localStorage.removeItem("buyerApiKey");
       localStorage.removeItem("wsAccessToken");
+      localStorage.removeItem("accessToken");
       setMe(null);
       setAuthStatus("guest");
       router.replace("/login");

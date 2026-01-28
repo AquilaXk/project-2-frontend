@@ -47,7 +47,7 @@ export default function MainPage() {
         const [postsParsed, auctionsParsed] = await Promise.all([
           apiRequest<{ content?: PostPreview[] }>("/api/v1/posts?page=0"),
           apiRequest<{ content?: AuctionPreview[] }>(
-            "/api/auctions?status=OPEN&page=0&size=4"
+            "/api/v1/auctions?status=OPEN&page=0&size=4"
           ),
         ]);
         if (!isMounted) return;
